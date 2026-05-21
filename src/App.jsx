@@ -546,7 +546,6 @@ function App() {
             projects={orgProjects}
             memberCount={orgMembers.length}
             onOpenProject={openProject}
-            inviteCode={workspace.organizations.find((org) => org.id === effectiveOrgId)?.inviteCode}
           />,
         )}
       />

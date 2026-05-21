@@ -1,14 +1,5 @@
-import { useState } from 'react'
-
-export default function OrgDashboardPage({ orgName, role, projects, memberCount, onOpenProject, inviteCode }) {
-  const [copied, setCopied] = useState(false)
+export default function OrgDashboardPage({ orgName, role, projects, memberCount, onOpenProject }) {
   const hasOrg = orgName && orgName !== 'Org'
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(inviteCode)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   if (!hasOrg) {
     return (
@@ -37,16 +28,6 @@ export default function OrgDashboardPage({ orgName, role, projects, memberCount,
           <span className="db-live-dot" />
         </div>
       </div>
-
-      {role === 'admin' && inviteCode && (
-        <div className="db-invite-bar">
-          <span className="db-invite-label">Invite code:</span>
-          <code className="db-invite-code">{inviteCode}</code>
-          <button type="button" className="db-open-btn" onClick={handleCopy}>
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
-      )}
 
       <div className="db-grid">
         {projects.map((project) => (
