@@ -22,3 +22,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+server/.env
+
+# Tests / coverage
+.coverage
+htmlcov/
+
+# OS
+Thumbs.db
