@@ -1,5 +1,6 @@
 ﻿import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback  } from 'react'
+import { useProjectSocket } from './hooks/useProjectSocket'
 import { api, saveToken, clearToken } from './api/client'
 import TopBar from './components/TopBar'
 import AuthPage from './pages/AuthPage'
@@ -512,6 +513,54 @@ function App() {
       tasks: prev.tasks.filter((t) => !(t.projectId === projectId && t.id === taskId)),
     }))
   }
+
+  // ── WEBSOCKET ─────────────────────────────────────────────────────────────
+
+  const handleWsEvent = useCallback((event) => {
+    const { type, payload } = event
+
+    setWorkspace((prev) => {
+      switch (type) {
+
+        case 'task_created': {
+          // deduplicate — if we created it ourselves, addTask() already added it
+          const exists = prev.tasks.some((t) => t.id === payload.id)
+          if (exists) return prev
+          return { ...prev, tasks: [payload, ...prev.tasks] }
+        }
+
+        case 'task_status_updated': {
+          return {
+            ...prev,
+            tasks: prev.tasks.map((t) =>
+              t.id === payload.taskId ? { ...t, status: payload.status } : t
+            ),
+          }
+        }
+
+        case 'task_reassigned': {
+          return {
+            ...prev,
+            tasks: prev.tasks.map((t) =>
+              t.id === payload.taskId ? { ...t, assigneeId: payload.assigneeId } : t
+            ),
+          }
+        }
+
+        case 'task_deleted': {
+          return {
+            ...prev,
+            tasks: prev.tasks.filter((t) => t.id !== payload.taskId),
+          }
+        }
+
+        default:
+          return prev
+      }
+    })
+  }, [])
+
+  useProjectSocket(selectedProjectId, handleWsEvent)
 
   // ── MEMBERS ───────────────────────────────────────────────────────────────
 
