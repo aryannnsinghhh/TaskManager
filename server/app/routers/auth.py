@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.models.entities import OrgMember, User
 from app.models.schemas import LoginPayload, SignupPayload
+from app.core.authz import get_current_user_id
 
 router = APIRouter()
 
