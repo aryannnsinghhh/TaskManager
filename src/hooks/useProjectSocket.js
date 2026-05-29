@@ -5,6 +5,8 @@ const WS_BASE = import.meta.env.VITE_API_BASE_URL
   ? import.meta.env.VITE_API_BASE_URL.replace(/^http/, 'ws').replace('/api', '')
   : 'ws://localhost:8000'
 
+console.log(WS_BASE) // temporary 
+
 const MAX_BACKOFF_MS = 30_000
 
 export function useProjectSocket(projectId, onEvent) {
