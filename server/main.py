@@ -1,7 +1,7 @@
 ﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.db import init_db, close_db
-from app.routers import auth, orgs, projects, tasks, requests
+from app.routers import auth, orgs, projects, tasks, requests, ws as ws_router
 
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
@@ -37,6 +37,7 @@ app.include_router(orgs.router, prefix='/api/orgs', tags=['orgs'])
 app.include_router(projects.router, prefix='/api/projects', tags=['projects'])
 app.include_router(tasks.router, prefix='/api/tasks', tags=['tasks'])
 app.include_router(requests.router, prefix='/api/requests', tags=['requests'])
+app.include_router(ws_router.router, prefix="/ws")
 
 
 @app.get('/api/health')
