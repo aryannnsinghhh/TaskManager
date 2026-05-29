@@ -1,5 +1,5 @@
 ﻿import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { api, saveToken, clearToken } from './api/client'
 import TopBar from './components/TopBar'
 import AuthPage from './pages/AuthPage'
@@ -23,12 +23,6 @@ const emptyWorkspace = {
   tasks: [],
   orgInvites: [],
   projectInviteCodes: {},
-}
-
-const extractInviteCode = (raw) => {
-  const value = raw.trim()
-  if (value.includes('/join/')) return value.split('/join/').pop()?.trim() || ''
-  return value
 }
 
 function ProjectDetailRoute({
@@ -85,6 +79,28 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [activeOrgId, setActiveOrgId] = useState(null)
   const [selectedProjectId, setSelectedProjectId] = useState(null)
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      try {
+        const data = await api.auth.me()
+        const userObj = { ...data.user, name: data.user.full_name }
+        setCurrentUserId(data.user.id)
+        setCurrentUser(userObj)
+        if (data.orgMemberships.length > 0) {
+          const orgId = data.orgMemberships[0].orgId
+          setActiveOrgId(orgId)
+          await loadOrgData(data.user.id, orgId, userObj)
+        } else {
+          setWorkspace({ ...emptyWorkspace, users: [userObj] })
+        }
+      } catch {
+        // token missing or expired — stay on auth page
+        clearToken()
+      }
+    }
+    bootstrap()
+  }, []) // runs once on mount
 
   const userOrgMemberships = useMemo(
     () => workspace.orgMembers.filter((member) => member.userId === currentUserId),
@@ -149,17 +165,27 @@ function App() {
     return access
   }, [workspace.projectMembers, currentUserId])
 
-  const approvedProjectIds = new Set(
+  const approvedProjectIds = useMemo(() => new Set(
     workspace.projectMembers
       .filter((member) => member.userId === currentUserId && member.status === 'approved')
       .map((member) => member.projectId),
+  ), [workspace.projectMembers, currentUserId])
+
+  const userMap = useMemo(
+    () => workspace.users.reduce((acc, user) => ({ ...acc, [user.id]: user.name }), {}),
+    [workspace.users],
   )
 
-  const userMap = workspace.users.reduce((acc, user) => ({ ...acc, [user.id]: user.name }), {})
-  const projectMap = workspace.projects.reduce((acc, project) => ({ ...acc, [project.id]: project.name }), {})
+  const projectMap = useMemo(
+    () => workspace.projects.reduce((acc, project) => ({ ...acc, [project.id]: project.name }), {}),
+    [workspace.projects],
+  )
 
-  const myTasks = workspace.tasks.filter(
-    (task) => task.assigneeId === currentUserId && approvedProjectIds.has(task.projectId),
+  const myTasks = useMemo(
+    () => workspace.tasks.filter(
+      (task) => task.assigneeId === currentUserId && approvedProjectIds.has(task.projectId),
+    ),
+    [workspace.tasks, currentUserId, approvedProjectIds],
   )
 
   const groupedRequests = useMemo(() => {
@@ -186,8 +212,10 @@ function App() {
   // ── AUTH ──────────────────────────────────────────────────────────────────
 
   const loadOrgData = async (userId, orgId, userObj) => {
-    const orgsData = await api.orgs.list()
-    const projectsData = await api.projects.listByOrg(orgId)
+    const [orgsData, projectsData] = await Promise.all([
+      api.orgs.list(),
+      api.projects.listByOrg(orgId),
+    ])
     setWorkspace({
       ...emptyWorkspace,
       organizations: orgsData.organizations,
@@ -411,19 +439,22 @@ function App() {
   const loadAccessRequests = async () => {
     if (!effectiveOrgId) return
     const data = await api.requests.byOrg(effectiveOrgId)
-    const requestingUserIds = data.requests.map(r => r.userId)
-    const existingIds = new Set(workspace.users.map(u => u.id))
-    const newMembers = data.requests
-      .filter(r => !existingIds.has(r.userId))
-      .map(r => ({ id: r.userId, name: r.userName, email: r.userEmail }))
-    setWorkspace((prev) => ({
-      ...prev,
-      users: [...prev.users, ...newMembers],
-      projectMembers: [
-        ...prev.projectMembers.filter(pm => !data.requests.find(r => r.userId === pm.userId && r.projectId === pm.projectId)),
-        ...data.requests.map(r => ({ projectId: r.projectId, userId: r.userId, status: 'pending' })),
-      ],
-    }))
+    setWorkspace((prev) => {
+      const existingIds = new Set(prev.users.map(u => u.id))
+      const newMembers = data.requests
+        .filter(r => !existingIds.has(r.userId))
+        .map(r => ({ id: r.userId, name: r.userName, email: r.userEmail }))
+      return {
+        ...prev,
+        users: [...prev.users, ...newMembers],
+        projectMembers: [
+          ...prev.projectMembers.filter(pm =>
+            !data.requests.find(r => r.userId === pm.userId && r.projectId === pm.projectId)
+          ),
+          ...data.requests.map(r => ({ projectId: r.projectId, userId: r.userId, status: 'pending' })),
+        ],
+      }
+    })
   }
 
   // ── TASKS ─────────────────────────────────────────────────────────────────
@@ -445,11 +476,21 @@ function App() {
     }
   }
 
-  const reorderProjectTasks = (projectId, nextProjectTasks) => {
-    setWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.filter((t) => t.projectId !== projectId).concat(nextProjectTasks),
+  const reorderProjectTasks = async (projectId, nextProjectTasks) => {
+    const prev = workspace.tasks.filter((t) => t.projectId === projectId)
+    const statusChanges = nextProjectTasks.filter((next) => {
+      const old = prev.find((t) => t.id === next.id)
+      return old && old.status !== next.status
+    })
+
+    setWorkspace((current) => ({
+      ...current,
+      tasks: current.tasks.filter((t) => t.projectId !== projectId).concat(nextProjectTasks),
     }))
+
+    for (const task of statusChanges) {
+      await api.tasks.updateStatus(task.id, task.status)
+    }
   }
 
   const reassignTask = async (projectId, approvedIds, taskId, assigneeId) => {

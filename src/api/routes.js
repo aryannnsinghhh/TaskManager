@@ -5,6 +5,7 @@ export const apiRoutes = {
   auth: {
     login: `${API_BASE}/auth/login`,
     signup: `${API_BASE}/auth/signup`,
+    me: `${API_BASE}/auth/me`,
   },
   orgs: {
     list: `${API_BASE}/orgs`,

@@ -65,3 +65,14 @@ async def login(payload: LoginPayload, db: AsyncSession = Depends(get_db)):
         'user': _user_out(user),
         'orgMemberships': [{'orgId': m.org_id, 'userId': m.user_id, 'role': m.role} for m in memberships],
     }
+
+@router.get('/me')
+async def get_me(user_id: str = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    user = await db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    memberships = (await db.execute(select(OrgMember).where(OrgMember.user_id == user_id))).scalars().all()
+    return {
+        'user': _user_out(user),
+        'orgMemberships': [{'orgId': m.org_id, 'userId': m.user_id, 'role': m.role} for m in memberships],
+    }
