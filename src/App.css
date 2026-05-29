@@ -1220,3 +1220,44 @@
   color: #4f46e5;
   letter-spacing: 0.08em;
 }
+
+.notif-stack {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 9999;
+}
+
+.notif-banner {
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: notif-slide-in 0.2s ease;
+  max-width: 320px;
+}
+
+.notif-approved {
+  background: #22c55e;
+  color: #fff;
+}
+
+.notif-rejected {
+  background: #ef4444;
+  color: #fff;
+}
+
+.notif-info {
+  background: #3b82f6;
+  color: #fff;
+}
+
+@keyframes notif-slide-in {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}

@@ -1,6 +1,9 @@
 ﻿import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { useMemo, useState, useEffect, useCallback  } from 'react'
 import { useProjectSocket } from './hooks/useProjectSocket'
+import { useUserSocket } from './hooks/useUserSocket'
+import { useOrgSocket } from './hooks/useOrgSocket'
+import NotificationBanner from './components/NotificationBanner'
 import { api, saveToken, clearToken } from './api/client'
 import TopBar from './components/TopBar'
 import AuthPage from './pages/AuthPage'
@@ -80,6 +83,16 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [activeOrgId, setActiveOrgId] = useState(null)
   const [selectedProjectId, setSelectedProjectId] = useState(null)
+  const [notifications, setNotifications] = useState([])
+
+  const addNotification = useCallback((message, kind) => {
+    const id = crypto.randomUUID()
+    setNotifications((prev) => [...prev, { id, message, kind }])
+  }, [])
+
+  const dismissNotification = useCallback((id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  }, [])
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -562,6 +575,43 @@ function App() {
 
   useProjectSocket(selectedProjectId, handleWsEvent)
 
+  const handleUserEvent = useCallback((event) => {
+    if (event.type === 'request_decided') {
+      const { projectName, status } = event.payload
+      const message = status === 'approved'
+        ? `Your request to join "${projectName}" was approved`
+        : `Your request to join "${projectName}" was rejected`
+      const kind = status === 'approved' ? 'approved' : 'rejected'
+      addNotification(message, kind)
+
+      // update local membership state so board becomes accessible immediately
+      if (status === 'approved') {
+        setWorkspace((prev) => ({
+          ...prev,
+          projectMembers: prev.projectMembers.map((m) =>
+            m.projectId === event.payload.projectId && m.userId === currentUserId
+              ? { ...m, status: 'approved' }
+              : m
+          ),
+        }))
+      }
+    }
+  }, [addNotification, currentUserId])
+
+  const handleOrgEvent = useCallback((event) => {
+    if (event.type === 'request_decided') {
+      const { projectName, userId, status } = event.payload
+      const userName = userMap[userId] || 'A member'
+      const message = status === 'approved'
+        ? `${userName}'s request to join "${projectName}" was approved`
+        : `${userName}'s request to join "${projectName}" was rejected`
+      addNotification(message, 'info')
+    }
+  }, [addNotification, userMap])
+
+  useUserSocket(currentUserId, handleUserEvent)
+  useOrgSocket(isAdmin ? effectiveOrgId : null, handleOrgEvent)
+
   // ── MEMBERS ───────────────────────────────────────────────────────────────
 
   const handleInvite = async ({ projectId, email }) => {
@@ -586,6 +636,10 @@ function App() {
     const orgName = workspace.organizations.find((org) => org.id === effectiveOrgId)?.name
     return (
       <main className={`workspace ${darkMode ? 'theme-dark' : ''}`}>
+        <NotificationBanner
+          notifications={notifications}
+          onDismiss={dismissNotification}
+        />
         <TopBar
           darkMode={darkMode}
           onToggleTheme={() => setDarkMode((prev) => !prev)}
